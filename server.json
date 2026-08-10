@@ -1,0 +1,22 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.lukefen31/imagic",
+  "description": "Drive the imagic photo editor from any MCP client: scan, cull, edit, style, and export, all local.",
+  "version": "0.8.0",
+  "websiteUrl": "https://imagic.ink/mcp",
+  "repository": {
+    "url": "https://github.com/Lukefen31/imagic-mcp",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "imagic",
+      "version": "0.8.0",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
