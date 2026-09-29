@@ -26,84 +26,75 @@ Edits land as non-destructive adjustments in imagic's edit history, the same as 
 
 ## Install
 
-1. Download imagic from [imagic.ink/desktop](https://imagic.ink/desktop). The free 7-day trial includes everything, no card required.
+1. Download imagic from [imagic.ink/desktop](https://imagic.ink/desktop). The free trial covers 500 exports with everything in imagic Max, no card required (importing, culling and editing never count against it).
 2. Launch the app once and activate (trial or license). The MCP server reuses that activation.
 3. Connect your MCP client (below).
 
+The server is the imagic app itself, started with `--mcp`. There is no pip package and no separate `imagic-mcp` command in the packaged app; point your client at the installed binary:
+
+- Windows: `C:\Program Files\imagic\imagic.exe`
+- macOS: `/Applications/imagic.app/Contents/MacOS/imagic`
+
+Per-client setup for fourteen clients (config file locations, the right config key for each) is at [imagic.ink/mcp/setup](https://imagic.ink/mcp/setup).
+
 ### Claude Code
-
-If you installed imagic via pip (MCP is an optional extra):
-
-```bash
-pip install imagic[mcp]
-claude mcp add imagic -- imagic-mcp
-```
-
-If you installed the packaged desktop app, point the client at the bundled executable:
 
 ```bash
 claude mcp add imagic -- "C:\Program Files\imagic\imagic.exe" --mcp
 ```
 
-### Claude Desktop
+On macOS:
 
-Add this to your `claude_desktop_config.json`:
+```bash
+claude mcp add imagic -- /Applications/imagic.app/Contents/MacOS/imagic --mcp
+```
+
+### Claude Desktop, Cursor and other JSON-config clients
+
+Add this to the client's MCP config (`claude_desktop_config.json` for Claude Desktop):
 
 ```json
 {
   "mcpServers": {
     "imagic": {
-      "command": "imagic-mcp"
+      "command": "C:\Program Files\imagic\imagic.exe",
+      "args": ["--mcp"]
     }
   }
 }
 ```
 
-### Cursor
-
-Most MCP clients that read a JSON config file, including Cursor, accept the same shape. Add it to that client's MCP config:
-
-```json
-{
-  "mcpServers": {
-    "imagic": {
-      "command": "imagic-mcp",
-      "args": []
-    }
-  }
-}
-```
-
-For the packaged app, use `"command": "C:\\Program Files\\imagic\\imagic.exe"` with `"args": ["--mcp"]`.
+On macOS use `"command": "/Applications/imagic.app/Contents/MacOS/imagic"` with the same `"args": ["--mcp"]`.
 
 ### Codex CLI
 
-One command:
-
 ```bash
-codex mcp add imagic -- imagic-mcp
+codex mcp add imagic -- "C:\Program Files\imagic\imagic.exe" --mcp
 ```
 
-Or add it to `~/.codex/config.toml`:
+Or in `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.imagic]
-command = "imagic-mcp"
+command = 'C:\Program Files\imagic\imagic.exe'
+args = ["--mcp"]
 ```
 
-GitHub Copilot and any other MCP-compatible client work the same way: point the client at the `imagic-mcp` command (or the packaged executable with `--mcp`) as a local stdio server.
+GitHub Copilot and any other MCP-compatible client work the same way: a local stdio server whose command is the imagic binary with `--mcp`.
 
-## The 18 tools
+## The 21 tools
 
 | Tool | What it does | Say this |
 |---|---|---|
 | `scan_directory` | Index a folder of RAWs and JPEGs into the library. | "Scan D:/Shoots/june-wedding and tell me what's inside." |
-| `list_photos` | Query the library by score, status, or filename filters. | "List every frame scoring above 80 in this shoot." |
+| `list_photos` | List photos with their scores, filtered by status, a page at a time. | "List everything you kept in this shoot." |
 | `get_photo` | Pull one photo's full record, scores and metadata. | "What did the analysis say about _MG_2041.CR3?" |
 | `get_library_stats` | Shoot-level counts, keep rates, and cull progress. | "How far through culling this shoot am I?" |
 | `analyze_photos` | Score sharpness, exposure, noise, composition, and detail. Flags duplicates and bursts. | "Score everything and flag the keepers." |
-| `set_photo_status` | Keep, reject, or unflag any set of photos. | "Reject everything below 40 except the group shots." |
+| `set_photo_status` | Override one photo's decision: keep, trash, or back to undecided. Trash never deletes files. | "Keep number 12, trash 15." |
 | `reselect_photos` | Re-rank keepers instantly, no re-analysis. Top-N portfolio mode. | "Actually, just keep the best 150." |
+| `check_score_freshness` | Report how many stored scores came from an older AI scorer. | "Are any of these scores out of date?" |
+| `reanalyze_stale_photos` | Re-score only the photos an older scorer judged; your manual picks are left alone. | "Re-score the stale ones." |
 | `apply_adjustments` | Exposure, color, crop, the full adjustment set, per photo or in batch. | "Lift the shadows a touch on the ceremony set." |
 | `list_presets` | Every preset saved in your imagic install, listed for the agent. | "What presets do I have to work with?" |
 | `apply_preset` | Batch-apply any saved preset across a selection. | "Run my film preset over the golden hour frames." |
@@ -115,6 +106,7 @@ GitHub Copilot and any other MCP-compatible client work the same way: point the 
 | `learn_style_from_library` | Train the profile on every photo you've ever edited in imagic. | "Learn my style from everything I have edited." |
 | `match_style_from_examples` | Edit a few frames from a shoot; it matches the rest to that look, without touching your saved profile. | "I edited five from this wedding, match the rest to them." |
 | `export_photos` | Batch export the keepers in your format and size, resumable if interrupted mid-batch. | "Export the keepers as full-res JPEGs." |
+| `get_preview_url` | Link to the local live-preview page that shows what the agent is doing as it happens. | "Show me what you are doing." |
 
 ## Style learning: start with 8, train it on everything
 
@@ -134,7 +126,7 @@ The MCP server runs locally beside imagic and talks to your AI client over your 
 
 ## Licensing
 
-The MCP server and headless CLI are part of **imagic Max** (EUR 99, one-time, no subscription). imagic's paid tiers start at EUR 19; Lite and Plus run the full GUI but do not unlock headless or MCP automation. The **free 7-day trial includes full Max access**, MCP and CLI included, with no card required.
+The MCP server and headless CLI are part of **imagic Max** (EUR 99, one-time, no subscription). imagic's paid tiers start at EUR 19; Lite and Plus run the full GUI but do not unlock headless or MCP automation. The **free trial includes full Max access** for 500 exports, MCP and CLI included, with no card required.
 
 Headless and MCP use need an activated desktop license: launch the GUI once, activate with your trial or license key, and the MCP server reuses that activation.
 
