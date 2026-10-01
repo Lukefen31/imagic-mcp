@@ -1,11 +1,17 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.lukefen31/imagic",
-  "description": "Drive the imagic photo editor from any MCP client: scan, cull, edit, style, and export, all local. The server ships inside the imagic desktop app (run it with --mcp).",
-  "version": "1.4.3",
+  "name": "io.github.Lukefen31/imagic",
+  "description": "AI-cull, edit and export RAW photos locally with the imagic desktop app, from any MCP client.",
+  "version": "1.4.4",
   "websiteUrl": "https://imagic.ink/mcp",
   "repository": {
     "url": "https://github.com/Lukefen31/imagic-mcp",
     "source": "github"
-  }
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.imagic.ink/mcp"
+    }
+  ]
 }
