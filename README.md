@@ -82,6 +82,17 @@ args = ["--mcp"]
 
 GitHub Copilot and any other MCP-compatible client work the same way: a local stdio server whose command is the imagic binary with `--mcp`.
 
+## Container and directory listing (introspection only)
+
+The `Dockerfile` in this repository builds a stand-in server for MCP directories such as Glama. It is not the real server and it does no photo work. It starts over stdio, answers `initialize` and `tools/list` with the real imagic tool names, descriptions and input schemas (snapshotted in `tools.json` from the shipping server, version 1.4.4), and answers every `tools/call` with an error saying the imagic desktop app is required. The real server needs the desktop app and your local photo library, so it cannot run in a container. To actually use the tools, install the app as described above.
+
+Note: the shipping server currently exposes 30 tools, more than the table below. `tools.json` is the complete list, dumped from the real server.
+
+```bash
+docker build -t imagic-mcp .
+python test_introspection.py docker run -i --rm imagic-mcp
+```
+
 ## The 21 tools
 
 | Tool | What it does | Say this |

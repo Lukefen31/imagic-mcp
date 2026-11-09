@@ -1,0 +1,929 @@
+[
+  {
+    "name": "scan_directory",
+    "description": "Scan a folder of photos into the imagic library.\n\n        Use this first, before any culling, editing, or exporting: nothing\n        else works on photos that have not been ingested. Give an absolute\n        path to a folder of RAW or JPEG/PNG/TIFF files. Subfolders are\n        included. Re-scanning is safe; already-known files are skipped.\n\n        Pass the path exactly as the user gave it, whole and unedited.\n        Folder names often contain spaces and \" - \" (for example\n        \"Holland 2025 - people-free\"); never split or shorten a path at a\n        dash. Everything inside the folder is imported, so if the folder\n        does not exist the tool errors with the nearest matches, and if a\n        similarly named folder sits beside it (or inside it) the tool\n        refuses and lists them: ask the user which one they mean. Set\n        confirm_exact_path=true only when the user has confirmed that exact\n        folder is the one they want.\n        Returns counts of discovered, newly ingested, and skipped files.\n\n        On a remote connection this can take minutes on a big card: past a\n        short budget it returns {\"status\": \"running\", \"job_id\": ...}\n        instead — call get_job_status with that job_id to keep checking and\n        get the same result shown above once it is ready. Local clients\n        always get the result directly.\n        ",
+    "inputSchema": {
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "confirm_exact_path": {
+          "default": false,
+          "title": "Confirm Exact Path",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "scan_directoryArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "analyze_photos",
+    "description": "Run AI quality scoring and auto-culling on all pending photos.\n\n        Scores sharpness, exposure, and composition, detects duplicates, and\n        sorts photos into keep, trash, or culled (undecided). Optional\n        thresholds are 0.0 to 1.0: a photo scoring at or above keep_threshold\n        becomes keep, at or below trash_threshold becomes trash. Leave both\n        unset to use the user's configured defaults. Can take a while on a\n        large library; heavier AI models are skipped automatically when not\n        installed. Returns analysis stats plus per-status library counts.\n\n        Only pending photos are scored: already-analysed photos keep their\n        stored score, even if the scorer has improved since. Use\n        reanalyze_stale_photos for those.\n\n        smart_rank (default false, experimental) adds a second pass after\n        the fast cull: an image-understanding model rates which analysed\n        photos are worth keeping and which are snapshots (signs, parked\n        cars, floors), and the whole library is re-ranked from that. It\n        also re-ranks photos analysed earlier, so it can be used on its own\n        with no pending photos. Opt in only when the user wants better top\n        picks over speed: it needs a one-time download of about 600 MB if\n        this machine has never used photo search, and adds roughly two\n        minutes per 1,000 photos. It never re-runs the analysis, never\n        changes a manual keep/trash decision, and if it fails or is\n        unavailable the fast cull's results stay as they were. The reply\n        carries a smart_rank block with the estimate, status and counts.\n\n        Remote: dispatched as a background job past the call budget, like\n        scan_directory — poll get_job_status with the returned job_id.\n        ",
+    "inputSchema": {
+      "properties": {
+        "keep_threshold": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Keep Threshold"
+        },
+        "trash_threshold": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trash Threshold"
+        },
+        "smart_rank": {
+          "default": false,
+          "title": "Smart Rank",
+          "type": "boolean"
+        }
+      },
+      "title": "analyze_photosArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "reselect_photos",
+    "description": "Instantly re-rank analysed photos from their stored scores.\n\n        Use this instead of analyze_photos when photos are already scored\n        and you only want a different selection: it re-applies thresholds\n        and the keep-limit from stored data in well under a second, with no\n        re-analysis. Manual picks (statuses the user or set_photo_status\n        chose) are always preserved and reported as manual_preserved.\n\n        mode=\"pipeline\" (default) reruns the normal decision engine:\n        keep/trash thresholds plus the shoot-relative selection pass, with\n        target_count as a ceiling on keepers. That pass caps near-duplicate\n        frames at 4 per look, so it can keep fewer than target_count; the\n        result carries a note when that happens.\n\n        mode=\"top_n\" is what \"give me the best N for a portfolio\" means:\n        exactly target_count photos become keep and every other analysed\n        photo becomes culled (review), nothing ever moves to trash, and at\n        most max_per_group of them (default 1) come from the same\n        near-duplicate/burst group — the same grouping the app's own cull\n        uses — so a shutter-happy burst cannot fill the selection with\n        near-identical frames. If the one-per-group pool is smaller than\n        target_count, the remainder is filled from the next-best frames\n        regardless of group, and the result says so. target_count is\n        required.\n\n        Great for live tweaking: call it repeatedly with different values\n        until the user likes the counts. Returns keep/review/trash counts,\n        manual_preserved, total_considered, and per-status library counts.\n        A stale_scores block appears when some of the stored scores came from\n        an older scorer; re-ranking cannot fix those, so relay it and offer\n        reanalyze_stale_photos rather than re-cutting again.\n        ",
+    "inputSchema": {
+      "properties": {
+        "keep_threshold": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Keep Threshold"
+        },
+        "trash_threshold": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trash Threshold"
+        },
+        "target_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Count"
+        },
+        "mode": {
+          "default": "pipeline",
+          "title": "Mode",
+          "type": "string"
+        },
+        "max_per_group": {
+          "default": 1,
+          "title": "Max Per Group",
+          "type": "integer"
+        }
+      },
+      "title": "reselect_photosArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "check_score_freshness",
+    "description": "Check whether stored quality scores came from the current AI scorer.\n\n        Scores are saved once and never recomputed, so photos analysed before\n        a scorer improvement keep the verdict the old code gave them. This\n        reports how many scored photos are stale, which scorer versions they\n        carry, how many can be re-scored automatically, and how many are the\n        user's own manual decisions and so are left alone. Cheap: one small\n        set of counts, no analysis. Call it when a score looks wrong for the\n        photo, when the user questions a verdict, or before trusting stored\n        scores for a selection. The advice field says what to do next.\n        ",
+    "inputSchema": {
+      "properties": {},
+      "title": "check_score_freshnessArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "reanalyze_stale_photos",
+    "description": "Re-score photos whose stored scores came from an older AI scorer.\n\n        The fix for what check_score_freshness reports: hands every stale\n        photo the pipeline owns back to the analyser and runs a full analysis\n        pass on them, so their scores and cull reasons reflect the current\n        scoring rules. reselect_photos cannot do this: it re-ranks stored\n        numbers. The user's manual keep/trash decisions are never re-scored\n        and come back as manual_skipped. Takes as long as analyze_photos does\n        for that many photos, so tell the user before starting on a large\n        library. Returns analysis stats plus per-status library counts.\n\n        Remote: dispatched as a background job past the call budget, like\n        scan_directory — poll get_job_status with the returned job_id.\n        ",
+    "inputSchema": {
+      "properties": {},
+      "title": "reanalyze_stale_photosArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_library_stats",
+    "description": "Get photo counts per pipeline status (pending, keep, trash, ...).\n\n        Cheap. Call it to orient yourself before deciding what to do next,\n        or to report progress to the user after a scan, analysis, or export.\n        ",
+    "inputSchema": {
+      "properties": {},
+      "title": "get_library_statsArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "list_photos",
+    "description": "List photos with id, filename, path, status, score, description and capture time.\n\n        name finds photos by file name, the way people refer to them\n        (\"DSC04851\"): case-insensitive, matches part of the name, and takes\n        several comma-separated names at once. Use it to turn the names a\n        user mentions into the photo ids every other tool expects.\n\n        taken is when the photo was shot (ISO time from EXIF): the way to\n        group a shoot by day or by evening (\"the sunset frames\") when there\n        is no description. taken_after / taken_before filter by it (ISO,\n        inclusive; a bare date covers the whole day), for example\n        status=\"keep\", taken_after=\"2026-09-22T18:00\": on a big shoot,\n        filter rather than listing everything. Capture times are read by\n        analyze_photos, so run it before filtering by time; until then the\n        response's note says how many photos have no time yet. Filter by status (pending, keep, trash, culled, exported, error) or\n        omit it for everything. Use limit and offset to page through large\n        libraries; the response includes the total match count. Photo ids\n        from this list are what every per-photo tool expects.\n        ",
+    "inputSchema": {
+      "properties": {
+        "status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        },
+        "limit": {
+          "default": 50,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "offset": {
+          "default": 0,
+          "title": "Offset",
+          "type": "integer"
+        },
+        "taken_after": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Taken After"
+        },
+        "taken_before": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Taken Before"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        }
+      },
+      "title": "list_photosArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_photo",
+    "description": "Get full details for one photo: status, scores, EXIF, edit state.\n\n        Use it when you need more than the list row, for example the AI\n        caption, cull reasons, camera settings, or whether it has edits.\n        ",
+    "inputSchema": {
+      "properties": {
+        "photo_id": {
+          "title": "Photo Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "photo_id"
+      ],
+      "title": "get_photoArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "set_photo_status",
+    "description": "Override a photo's cull decision: pending, keep, trash, or culled.\n\n        Use this to act on the user's verdicts (\"keep number 12, trash 15\")\n        or to promote undecided (culled) photos after reviewing them.\n        Trash never deletes files; it only excludes photos from export.\n        ",
+    "inputSchema": {
+      "properties": {
+        "photo_id": {
+          "title": "Photo Id",
+          "type": "integer"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "photo_id",
+        "status"
+      ],
+      "title": "set_photo_statusArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "list_presets",
+    "description": "List available looks: the user's saved presets, scene presets, color grades and experimental presets.\n\n        my_presets are the looks the photographer saved in the imagic editor\n        (\"Save current as preset\"), by name, with the sliders each one moves.\n        When the user mentions \"my preset\" or a look by a name that is not a\n        built-in key, it is one of these.\n\n        Scene presets (for example portrait, low_light) add slider offsets\n        tuned for a shooting situation. Color grades (for example film_warm,\n        moody, bw_classic) set an overall artistic look. Experimental presets\n        (for example bleach_bypass, cinestill, infrared_bw) are one-click\n        finishing effects from the editor's EXPERIMENTAL section, layered over\n        everything else. Show these to the user when they ask what styles or\n        filters are available, then use apply_preset.\n        ",
+    "inputSchema": {
+      "properties": {},
+      "title": "list_presetsArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "apply_preset",
+    "description": "Apply a saved preset, scene preset, color grade or experimental preset to the given photos.\n\n        preset_name must be a key from list_presets, or the name of one of\n        the user's my_presets (case does not matter). A saved preset sets\n        every slider it holds, like loading it in the editor; the photo's own\n        crop and mask layers stay. The look is stored the\n        same way the desktop editor stores edits, so exports render exactly\n        what the editor would show. Applying a second preset merges scene\n        preset offsets and replaces the color grade; an experimental preset\n        replaces the previous experimental preset and keeps the grade. A key\n        listed both as a color grade and as an experimental preset\n        (bleach_bypass) applies the experimental preset; for the grade, use\n        apply_adjustments {\"color_grade\": \"bleach_bypass\"}.\n        ",
+    "inputSchema": {
+      "properties": {
+        "photo_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Photo Ids",
+          "type": "array"
+        },
+        "preset_name": {
+          "title": "Preset Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "photo_ids",
+        "preset_name"
+      ],
+      "title": "apply_presetArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "list_luts",
+    "description": "List the colour LUTs in the user's imagic library.\n\n        The photographer adds LUTs they own (.cube, .3dl or Hald CLUT PNG)\n        in the imagic editor's LUTs section; each is listed here by name with\n        its kind (3D or 1D), size and the input it expects (Standard sRGB /\n        Rec.709, or a camera log space such as S-Log3). When the user asks\n        for \"my LUT\", a LUT by name, or a look that matches one of these,\n        use apply_lut. The list is empty until the user has added some.\n        ",
+    "inputSchema": {
+      "properties": {},
+      "title": "list_lutsArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "apply_lut",
+    "description": "Put one of the user's LUTs (see list_luts) on the given photos.\n\n        lut_name is a name or id from list_luts (case does not matter), or\n        \"none\" to remove the LUT. strength is 0..100: 100 is the full LUT,\n        50 blends it half-way with the photo without it. The LUT is a\n        finishing look applied after the rest of the edit, stored in each\n        photo's edit stack (so it survives reopening and is baked into\n        exports) and leaves every other adjustment as it was. Photos with a\n        LUT export through the editor's engine, so the file matches what the\n        editor shows.\n        ",
+    "inputSchema": {
+      "properties": {
+        "photo_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Photo Ids",
+          "type": "array"
+        },
+        "lut_name": {
+          "title": "Lut Name",
+          "type": "string"
+        },
+        "strength": {
+          "default": 100,
+          "title": "Strength",
+          "type": "number"
+        }
+      },
+      "required": [
+        "photo_ids",
+        "lut_name"
+      ],
+      "title": "apply_lutArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "apply_auto_color",
+    "description": "Auto Color: per-channel levels plus colour-cast removal, measured on each photo.\n\n        The fix for faded or scanned prints and strong casts that Temperature,\n        Tint, Blacks and Whites cannot reach: a print whose darkest pixel is a\n        milky grey and whose cast differs between shadows and highlights.\n        mode \"color\" sets each channel's own black and white point and snaps\n        neutral midtones to grey (removes the cast); mode \"contrast\" uses one\n        shared black and white point (restores range and depth, keeps the\n        photo's colour: right for a warm sunset, coloured stage light or a\n        toned black-and-white print); mode \"off\" removes it. strength 0..100\n        blends with the uncorrected photo. It is stored in the edit stack and\n        runs before every slider, so apply_adjustments and mask_adjust keep\n        working on top of the corrected photo. Set a crop first if the frame\n        has a white border or scanner edge: the measurement uses the crop.\n        The result reports the cast and black/white points it measured.\n        ",
+    "inputSchema": {
+      "properties": {
+        "photo_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Photo Ids",
+          "type": "array"
+        },
+        "strength": {
+          "default": 100,
+          "title": "Strength",
+          "type": "number"
+        },
+        "mode": {
+          "default": "color",
+          "title": "Mode",
+          "type": "string"
+        }
+      },
+      "required": [
+        "photo_ids"
+      ],
+      "title": "apply_auto_colorArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "harmonize_series",
+    "description": "Match exposure and white balance between neighbouring photos (drone mosaics, timelapse, events).\n\n        The fix for visible seams in an orthomosaic (Pix4D, Metashape,\n        WebODM) when clouds or the sun changed the light between frames, for\n        timelapse flicker, and for uneven exposure across an event set. Each\n        photo keeps its own grade; harmonize adds small Exposure, Temperature\n        and Tint offsets (ordinary sliders, so exports and the Lightroom XMP\n        handoff carry them) so that overlapping or consecutive frames match.\n        mode \"auto\" uses GPS neighbours when the photos carry GPS (footprint\n        overlaps from DJI altitude, yaw and focal length when present) and\n        capture order otherwise; \"gps\" or \"sequence\" force one; \"off\" removes\n        a previous harmonize. strength 0..100 scales the offsets. smoothness\n        0.1..10 (default 1): higher also evens out slow changes across the\n        whole set, lower only removes frame-to-frame jumps. dry_run=true\n        reports without writing. Re-running replaces, never stacks. Returns\n        per-photo offsets plus seam scores before and after (RMS brightness\n        and colour mismatch across overlaps, in stops; under about 0.05 is\n        invisible). Big sets return {\"status\": \"running\", \"job_id\"}: poll\n        get_job_status. Pair with preview_mosaic to look at the result.\n        ",
+    "inputSchema": {
+      "properties": {
+        "photo_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Photo Ids",
+          "type": "array"
+        },
+        "mode": {
+          "default": "auto",
+          "title": "Mode",
+          "type": "string"
+        },
+        "strength": {
+          "default": 100,
+          "title": "Strength",
+          "type": "number"
+        },
+        "dry_run": {
+          "default": false,
+          "title": "Dry Run",
+          "type": "boolean"
+        },
+        "smoothness": {
+          "default": 1.0,
+          "title": "Smoothness",
+          "type": "number"
+        }
+      },
+      "required": [
+        "photo_ids"
+      ],
+      "title": "harmonize_seriesArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "preview_mosaic",
+    "description": "Write a PNG preview of a drone set laid out by GPS, before and/or after harmonize_series.\n\n        Preview only: an approximate layout from GPS, not a georeferenced\n        map or a stitch (say so if you show it to the user). Frames are placed\n        at their GPS positions, sized from altitude and focal length (or the\n        median spacing) and rotated by gimbal yaw, with feathered overlaps\n        (blend \"seamlines\" cuts them like a stitcher instead, which shows\n        seams as edges). show \"before\", \"after\" or \"both\" side by side;\n        \"after\" is the applied harmonize, or a dry run when none is applied.\n        max_size is the PNG's long edge in pixels. group picks a separate\n        flight or area (0 = the largest). Returns the PNG path, a seam\n        heatmap PNG path, and seam_score_before/after (mean per-pixel\n        brightness disagreement between overlapping frames, in stops). Look\n        at the PNG; if seams remain, re-run harmonize_series with a higher\n        smoothness, or lower it if broad light changes were flattened.\n        ",
+    "inputSchema": {
+      "properties": {
+        "photo_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Photo Ids",
+          "type": "array"
+        },
+        "max_size": {
+          "default": 2048,
+          "title": "Max Size",
+          "type": "integer"
+        },
+        "show": {
+          "default": "both",
+          "title": "Show",
+          "type": "string"
+        },
+        "blend": {
+          "default": "feather",
+          "title": "Blend",
+          "type": "string"
+        },
+        "group": {
+          "default": 0,
+          "title": "Group",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "photo_ids"
+      ],
+      "title": "preview_mosaicArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "apply_adjustments",
+    "description": "Set editor slider values on one photo, or the same values on several.\n\n        Pass exactly one of photo_id (a single photo — returns\n        {\"photo_id\", \"adjustments\"}) or photo_ids (a list — applies the\n        same adjustments to each independently and returns\n        {\"results\": [...], \"applied\", \"failed\"}, one entry per photo so a\n        bad id in the list does not lose the rest of the batch).\n\n        adjustments maps slider names to numbers, for example\n        {\"exposure\": 20, \"contrast\": 10, \"temperature\": 5}. The sliders, all\n        -100..100 with 0 meaning no change unless a range is given:\n          light: exposure, contrast, highlights, shadows, whites, blacks\n          colour: temperature, tint, vibrance, saturation, and per colour\n            hsl_hue_<c>, hsl_sat_<c>, hsl_lum_<c> for c in red, orange,\n            yellow, green, aqua, blue, purple, magenta\n          presence: texture, clarity, dehaze\n          detail: sharp_amount (0..150), sharp_radius (10..200),\n            nr_luminance (0..100), nr_color (0..100)\n          split toning: split_shadow_hue, split_highlight_hue (0..360),\n            split_shadow_sat, split_highlight_sat (0..100), split_balance\n          effects: vignette_amount, vignette_midpoint (10..90),\n            grain_amount (0..100, film grain)\n          looks: color_grade (a grade key from list_presets),\n            color_grade_intensity (0..100), fx_preset (an experimental preset\n            key from list_presets, or \"none\"), fx_amount (0..100),\n            auto_color (0..100, Auto Color strength; see apply_auto_color),\n            auto_color_mode (\"color\" or \"contrast\"),\n            lut_name (a LUT from list_luts, or \"none\"), lut_strength (0..100)\n          tone_curve_<luminance|red|green|blue>: a list of [x, y] points in 0..1\n          crop_x, crop_y, crop_w, crop_h (pixels)\n        To crop by aspect ratio without pixel maths, use crop_photo; to\n        change only part of the frame, use mask_adjust. Values are absolute\n        slider positions, not deltas, and an analysed photo nobody has\n        edited already sits at its scene preset's values: for a relative\n        request (\"a stop brighter\" = exposure +50, \"a bit warmer\"), read the\n        current value with get_photo_edits and add to it. Values are\n        clamped to range and unknown names are rejected with the valid list.\n        New values overwrite previous values per slider; other sliders keep\n        their settings. The sliders run the Lightroom way: negative\n        highlights recovers bright areas, exposure +50 is one stop. A photo\n        edited on imagic's legacy engine is moved to the current one first,\n        keeping its look, so these values mean the same on every photo.\n        ",
+    "inputSchema": {
+      "properties": {
+        "photo_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Photo Id"
+        },
+        "adjustments": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Adjustments"
+        },
+        "photo_ids": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Photo Ids"
+        }
+      },
+      "title": "apply_adjustmentsArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "mask_adjust",
+    "description": "AI-mask part of a photo and adjust only that part (local adjustments).\n\n        target is \"subject\", \"sky\", \"people\" or \"background\": imagic finds it\n        with the same AI Masking the desktop editor uses (a second or two per\n        photo, on this machine). adjustments takes the same slider names as\n        apply_adjustments, for example {\"exposure\": 15, \"clarity\": 10} on the\n        subject and {\"exposure\": -20, \"saturation\": -15} on the background to\n        separate the two. Frame-level keys (crop, rotation, fx_preset) are\n        rejected; set those with apply_adjustments.\n\n        mode \"relative\" (default) adds the values on top of the photo's\n        current look, like a Lightroom mask. mode \"isolated\" renders the\n        region from the original with only these values, so later global\n        edits stop affecting it (the editor's layer default).\n\n        Each layer is saved as an editor mask layer named after the target\n        (or name): exports include it, and the photo reopens in the editor\n        with the layer as its own tab. Calling again with the same target or\n        name replaces that layer instead of stacking another; remove=true\n        deletes it. Pass photo_id for one photo or photo_ids for several\n        (each gets its own mask). Returns the mask's coverage (fraction of\n        the frame) and the photo's layer list; get_photo_edits lists layers\n        too. On a remote connection a long batch runs as a background job:\n        poll get_job_status with the returned job_id.\n        ",
+    "inputSchema": {
+      "properties": {
+        "target": {
+          "title": "Target",
+          "type": "string"
+        },
+        "adjustments": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Adjustments"
+        },
+        "photo_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Photo Id"
+        },
+        "photo_ids": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Photo Ids"
+        },
+        "mode": {
+          "default": "relative",
+          "title": "Mode",
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "remove": {
+          "default": false,
+          "title": "Remove",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "target"
+      ],
+      "title": "mask_adjustArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "crop_photo",
+    "description": "Crop photos to an aspect ratio; imagic does the pixel maths.\n\n        aspect is a ratio such as \"3:1\" (panorama strip), \"16:9\", \"4:5\",\n        \"1:1\", \"9:16\" (stories), \"original\", or \"free\" with box. The crop is\n        the largest of that shape that fits the frame, scaled by size (1.0 =\n        as big as possible, 0.5 = half as wide, a tighter crop) and centred\n        at center_x / center_y, fractions of the frame (0 = left/top, 1 =\n        right/bottom; it is nudged to stay inside). For a horizon or subject\n        that is not centred, move center_y / center_x towards it, for\n        example center_y=0.45 for a horizon just above the middle. box =\n        [x0, y0, x1, y1] fractions sets the crop exactly (aspect \"free\").\n        clear=true removes the crop. Saved as the editor's crop, so exports\n        are cropped and the editor shows the same frame. Returns the crop\n        box as fractions and the result size.\n        ",
+    "inputSchema": {
+      "properties": {
+        "aspect": {
+          "default": "original",
+          "title": "Aspect",
+          "type": "string"
+        },
+        "photo_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Photo Id"
+        },
+        "photo_ids": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Photo Ids"
+        },
+        "center_x": {
+          "default": 0.5,
+          "title": "Center X",
+          "type": "number"
+        },
+        "center_y": {
+          "default": 0.5,
+          "title": "Center Y",
+          "type": "number"
+        },
+        "size": {
+          "default": 1.0,
+          "title": "Size",
+          "type": "number"
+        },
+        "box": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Box"
+        },
+        "clear": {
+          "default": false,
+          "title": "Clear",
+          "type": "boolean"
+        }
+      },
+      "title": "crop_photoArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "save_preset",
+    "description": "Save a photo's current look as a named preset the user can reuse.\n\n        The same file the editor's \"Save current as preset\" writes: every\n        slider, the grade and any experimental preset, but never the crop or\n        mask layers (those belong to one photo). It then appears in\n        list_presets under my_presets, in the editor's preset menu, and can\n        be applied to other photos with apply_preset. Refuses to replace an\n        existing preset unless overwrite is true.\n        ",
+    "inputSchema": {
+      "properties": {
+        "photo_id": {
+          "title": "Photo Id",
+          "type": "integer"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "overwrite": {
+          "default": false,
+          "title": "Overwrite",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "photo_id",
+        "name"
+      ],
+      "title": "save_presetArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "export_photos",
+    "description": "Render and export photos with all their edits to a folder.\n\n        By default exports every keep photo (including previously exported\n        ones, re-rendered). Pass photo_ids to export a specific set instead,\n        or status to export a different group. dest_dir is created if needed;\n        inside it, files are grouped into a subfolder named after the source\n        shoot folder, and the result lists the exact file paths written.\n        Rendering is CPU-bound and can take seconds per RAW file; the result\n        reports exported and failed counts with per-photo errors.\n\n        Set lightroom=True when the user wants to carry on in Adobe\n        Lightroom: each proprietary RAW (ARW, CR3, NEF and similar) also gets\n        a Camera Raw .xmp sidecar, and the RAW plus its sidecar are copied\n        next to the export, so importing that folder into Lightroom opens\n        the RAW with the same slider values. The result lists the sidecars\n        in lightroom_sidecars. DNG, TIFF and JPEG files get no sidecar.\n        The sidecar also carries the keep/reject decision as a standard XMP\n        star rating (keep 1, trash -1; none when imagic has no decision), so\n        an unedited keeper gets a sidecar holding just that.\n        Experimental effects, mask layers, LUTs, heal and clone,\n        lens/perspective corrections and the expert RAW engine settings\n        have no Lightroom equivalent: they\n        stay in imagic's own render, and lightroom_not_carried names them per\n        photo. Tell the user when it is not empty, so they don't expect\n        Lightroom's version to match, and name only what it lists. Everything\n        else carries over: white balance, exposure and the tone sliders,\n        texture, clarity, dehaze, vibrance and saturation, HSL, colour grades\n        and split toning, the tone curve, sharpening, noise reduction,\n        vignette, grain, crop and straighten. If the user plans to finish in\n        Lightroom, prefer those.\n\n        On a remote connection dest_dir is restricted: a bare or relative\n        name (e.g. \"delivery\") always resolves under the user's configured\n        export folder, and an absolute path must be inside that folder or\n        one listed in their imagic config's mcp.remote_allowed_folders —\n        anything else comes back as an error explaining where exports go\n        and how to allow another folder. It is also dispatched as a\n        background job past the call budget, like scan_directory — poll\n        get_job_status with the returned job_id. Local clients are\n        unrestricted and always get the result directly.\n        ",
+    "inputSchema": {
+      "properties": {
+        "dest_dir": {
+          "title": "Dest Dir",
+          "type": "string"
+        },
+        "photo_ids": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Photo Ids"
+        },
+        "status": {
+          "default": "keep",
+          "title": "Status",
+          "type": "string"
+        },
+        "lightroom": {
+          "default": false,
+          "title": "Lightroom",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "dest_dir"
+      ],
+      "title": "export_photosArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_photo_edits",
+    "description": "Read back a photo's current adjustments and edit state.\n\n        Returns the slider values that are set, the active color grade and\n        scene preset, saved snapshot names, and whether the photo was\n        touched in the desktop editor. For a photo nobody has edited, the\n        values are its scene preset's starting point (starting_point says\n        so): the base any relative change (\"brighter\", \"a stop up\") adds to. Use it to inspect what the user did\n        manually, or to verify your own apply_adjustments calls.\n\n        When imagic's own AI edit (AI Auto-Enhance / AI Optimize All in the\n        editor) set the sliders, ai_explanation says why, per adjustment\n        group: each slider's value and the measurements that set it, the\n        look and the light it was chosen for, and any exposure-balance mask\n        with its reason. A slider changed since is marked. Quote it rather\n        than guessing why a value is what it is.\n        ",
+    "inputSchema": {
+      "properties": {
+        "photo_id": {
+          "title": "Photo Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "photo_id"
+      ],
+      "title": "get_photo_editsArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "start_style_calibration",
+    "description": "Begin teaching imagic the user's personal editing style.\n\n        This selects up to 8 diverse photos from the library as calibration\n        scenarios. Your job as the AI after calling it: (1) present each\n        scenario brief to the user, (2) ask them to open those photos in the\n        imagic editor and edit them to their personal taste, (3) wait until\n        the user says they are done, then (4) call record_style_calibration\n        with the returned session_id. Do not call record_style_calibration\n        before the user confirms they finished editing. If the library is\n        empty this returns an error telling you to ask the user for their\n        photos folder and call scan_directory first.\n\n        Remote: on a big library this is dispatched as a background job past\n        the call budget, like scan_directory — poll get_job_status with the\n        returned job_id.\n        ",
+    "inputSchema": {
+      "properties": {},
+      "title": "start_style_calibrationArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "record_style_calibration",
+    "description": "Record the user's calibration edits into their style profile.\n\n        Call this after the user says they finished editing the calibration\n        photos from start_style_calibration. Normally leave edits as None:\n        the edits the user made are read from the imagic library\n        automatically. Only pass edits explicitly (a list of\n        {\"photo_id\": ..., \"adjustments\": {...}}) if you gathered them some\n        other way. Returns how many were recorded and a profile summary.\n        ",
+    "inputSchema": {
+      "properties": {
+        "session_id": {
+          "title": "Session Id",
+          "type": "string"
+        },
+        "edits": {
+          "anyOf": [
+            {
+              "items": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Edits"
+        }
+      },
+      "required": [
+        "session_id"
+      ],
+      "title": "record_style_calibrationArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "learn_style_from_library",
+    "description": "Train the user's style profile from photos already edited in imagic.\n\n        Instant and needs no calibration session: it reads the slider\n        adjustments the user has already made in imagic and feeds them into\n        the same style profile that calibration builds. By default it learns\n        from every edited photo in the library, most recently edited first,\n        up to limit; pass photo_ids to train on a specific set instead.\n        Safe to re-run any time: each run refines the profile with the\n        photos' current edits. Use it after start_style_calibration to\n        deepen a fresh profile, or on its own to train from a back catalog\n        of edited photos with no session at all. Returns learned and\n        skipped counts, the scenarios covered, and a profile summary.\n\n        Remote: dispatched as a background job past the call budget, like\n        scan_directory — poll get_job_status with the returned job_id.\n        ",
+    "inputSchema": {
+      "properties": {
+        "photo_ids": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Photo Ids"
+        },
+        "limit": {
+          "default": 500,
+          "title": "Limit",
+          "type": "integer"
+        }
+      },
+      "title": "learn_style_from_libraryArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "match_style_from_examples",
+    "description": "Copy the look of a few edited photos onto the rest of a shoot.\n\n        The photographer edits a few photos from a shoot; call this to\n        apply that same look to the rest of the shoot. Different from\n        apply_my_style: this matches THESE examples, not the saved profile.\n        By default every edited photo in scope is an example and every\n        unedited photo in scope is a target; pass example_photo_ids or\n        target_photo_ids to control either side, and directory to scope\n        the match to one shoot folder. Needs at least 2 edited examples.\n        The match is session local and never changes the saved style\n        profile unless save_to_profile is true, which also feeds the\n        examples into the profile. Returns example and target counts plus\n        the scenarios the examples covered.\n        ",
+    "inputSchema": {
+      "properties": {
+        "example_photo_ids": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Example Photo Ids"
+        },
+        "target_photo_ids": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Photo Ids"
+        },
+        "directory": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Directory"
+        },
+        "save_to_profile": {
+          "default": false,
+          "title": "Save To Profile",
+          "type": "boolean"
+        }
+      },
+      "title": "match_style_from_examplesArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_style_profile",
+    "description": "Get the user's learned style profile, if one exists.\n\n        Use it to check whether calibration has been done and to describe\n        the learned style back to the user. Returns profile: null with\n        guidance when no calibration has been recorded yet.\n        ",
+    "inputSchema": {
+      "properties": {},
+      "title": "get_style_profileArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "apply_my_style",
+    "description": "Apply the user's learned personal style to the given photos.\n\n        Looks up the style profile built by calibration, gets suggested\n        slider adjustments (optionally for a named scenario such as the ones\n        from start_style_calibration), and applies them to each photo so\n        exports render in the user's taste. Errors with guidance if no\n        profile exists yet.\n        ",
+    "inputSchema": {
+      "properties": {
+        "photo_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Photo Ids",
+          "type": "array"
+        },
+        "scenario": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scenario"
+        }
+      },
+      "required": [
+        "photo_ids"
+      ],
+      "title": "apply_my_styleArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_preview_url",
+    "description": "Get the local live-preview URL showing your edits in real time.\n\n        imagic runs a small local web page that shows, live, what you are\n        doing to the user's photo library as you call these tools: scans,\n        culls, edits, and exports appear there the moment they happen. It\n        normally opens automatically in the user's browser when this MCP\n        server starts. Call this if the user asks to see what you are\n        doing, asks for a link, or says the preview window is not open:\n        tell them the URL, or that it should already be open in their\n        browser. running is false if the local preview server could not\n        start this session (for example a locked-down sandbox); in that\n        case just say so, it is nothing to fix on the user's end.\n        ",
+    "inputSchema": {
+      "properties": {},
+      "title": "get_preview_urlArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_job_status",
+    "description": "Check on a long-running job started by another tool on a remote connection.\n\n        scan_directory, analyze_photos, reanalyze_stale_photos,\n        export_photos, and learn_style_from_library each dispatch as a\n        background job on a remote connection when they cannot finish\n        within that call's own budget, returning {\"status\": \"running\",\n        \"job_id\": ...}. Call this with that job_id to keep checking: it\n        waits up to wait_seconds (capped at 30) for the job to finish before\n        answering, so a short loop of calls is enough to follow it to\n        completion. Once finished it returns exactly what the original tool\n        call would have returned. Only one long job runs at a time; while\n        one is running, other tools answer {\"status\": \"busy\", ...} instead\n        of their normal result. Local (stdio) clients can use this too, but\n        their long tools always finish synchronously, so there is normally\n        nothing to poll.\n        ",
+    "inputSchema": {
+      "properties": {
+        "job_id": {
+          "title": "Job Id",
+          "type": "string"
+        },
+        "wait_seconds": {
+          "default": 20,
+          "title": "Wait Seconds",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "job_id"
+      ],
+      "title": "get_job_statusArguments",
+      "type": "object"
+    }
+  }
+]
