@@ -137,6 +137,8 @@ The MCP server runs locally beside imagic and talks to your AI client over your 
 
 ## Licensing
 
+This repository (the introspection server, tool list and docs) is MIT licensed, see LICENSE. The imagic desktop app it drives is separate, proprietary software that needs its own trial or licence from https://imagic.ink.
+
 The MCP server and headless CLI are part of **imagic Max** (EUR 99, one-time, no subscription). imagic's paid tiers start at EUR 19; Lite and Plus run the full GUI but do not unlock headless or MCP automation. The **free trial includes full Max access** for 500 exports, MCP and CLI included, with no card required.
 
 Headless and MCP use need an activated desktop license: launch the GUI once, activate with your trial or license key, and the MCP server reuses that activation.
