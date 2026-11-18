@@ -2,7 +2,7 @@
 
 **The first photo editor with a built-in MCP server.**
 
-[imagic](https://imagic.ink) is a desktop photo editor for Windows and macOS with AI culling, a full non-destructive editor, and style learning. Its MCP (Model Context Protocol) server is built into the app, so Claude Code, Claude Desktop, Cursor, Codex, GitHub Copilot, or any other MCP client can drive the whole pipeline: scan a shoot, cull it, edit it in your style, and export the keepers. Everything runs locally on your machine.
+[imagic](https://imagic.ink) is a desktop photo editor for Windows, macOS and Linux (portable build) with AI culling, a full non-destructive editor, and style learning. Its MCP (Model Context Protocol) server is built into the app, so Claude Code, Claude Desktop, Cursor, Codex, GitHub Copilot, or any other MCP client can drive the whole pipeline: scan a shoot, cull it, edit it in your style, and export the keepers. Everything runs locally on your machine.
 
 This repository is the documentation and setup reference for that server. The server itself ships inside the imagic desktop app; there is no separate server source here.
 
@@ -34,6 +34,9 @@ The server is the imagic app itself, started with `--mcp`. There is no pip packa
 
 - Windows: `C:\Program Files\imagic\imagic.exe`
 - macOS: `/Applications/imagic.app/Contents/MacOS/imagic`
+- Linux (portable build): `/path/to/imagic/imagic`, inside the folder you extracted the `.tar.gz` to
+
+**Not our npm package.** The npm package called `imagic-mcp` (run with `npx imagic-mcp`) is an unrelated project by another author. Do not install it to connect imagic. imagic's MCP server is built into the desktop app.
 
 Per-client setup for fourteen clients (config file locations, the right config key for each) is at [imagic.ink/mcp/setup](https://imagic.ink/mcp/setup).
 
@@ -49,6 +52,12 @@ On macOS:
 claude mcp add imagic -- /Applications/imagic.app/Contents/MacOS/imagic --mcp
 ```
 
+On Linux:
+
+```bash
+claude mcp add imagic -- /path/to/imagic/imagic --mcp
+```
+
 ### Claude Desktop, Cursor and other JSON-config clients
 
 Add this to the client's MCP config (`claude_desktop_config.json` for Claude Desktop):
@@ -57,14 +66,14 @@ Add this to the client's MCP config (`claude_desktop_config.json` for Claude Des
 {
   "mcpServers": {
     "imagic": {
-      "command": "C:\Program Files\imagic\imagic.exe",
+      "command": "C:\\Program Files\\imagic\\imagic.exe",
       "args": ["--mcp"]
     }
   }
 }
 ```
 
-On macOS use `"command": "/Applications/imagic.app/Contents/MacOS/imagic"` with the same `"args": ["--mcp"]`.
+On macOS use `"command": "/Applications/imagic.app/Contents/MacOS/imagic"` and on Linux `"command": "/path/to/imagic/imagic"`, in both cases with the same `"args": ["--mcp"]`.
 
 ### Codex CLI
 
@@ -82,42 +91,55 @@ args = ["--mcp"]
 
 GitHub Copilot and any other MCP-compatible client work the same way: a local stdio server whose command is the imagic binary with `--mcp`.
 
+If you run imagic from a source checkout (developers only, not the packaged app), the checkout's own entry point is `imagic-mcp`, installed from that checkout, never from npm.
+
 ## Container and directory listing (introspection only)
 
-The `Dockerfile` in this repository builds a stand-in server for MCP directories such as Glama. It is not the real server and it does no photo work. It starts over stdio, answers `initialize` and `tools/list` with the real imagic tool names, descriptions and input schemas (snapshotted in `tools.json` from the shipping server, version 1.4.4), and answers every `tools/call` with an error saying the imagic desktop app is required. The real server needs the desktop app and your local photo library, so it cannot run in a container. To actually use the tools, install the app as described above.
+The `Dockerfile` in this repository builds a stand-in server for MCP directories such as Glama. It is not the real server and it does no photo work. It starts over stdio, answers `initialize` and `tools/list` with the real imagic tool names, descriptions and input schemas (snapshotted in `tools.json` from the shipping server, version 1.6.1), and answers every `tools/call` with an error saying the imagic desktop app is required. The real server needs the desktop app and your local photo library, so it cannot run in a container. To actually use the tools, install the app as described above.
 
-Note: the shipping server currently exposes 30 tools, more than the table below. `tools.json` is the complete list, dumped from the real server.
+`tools.json` is the complete list of 30 tools, dumped from the real 1.6.1 server.
 
 ```bash
 docker build -t imagic-mcp .
 python test_introspection.py docker run -i --rm imagic-mcp
 ```
 
-## The 21 tools
+## The 30 tools
 
-| Tool | What it does | Say this |
-|---|---|---|
-| `scan_directory` | Index a folder of RAWs and JPEGs into the library. | "Scan D:/Shoots/june-wedding and tell me what's inside." |
-| `list_photos` | List photos with their scores, filtered by status, a page at a time. | "List everything you kept in this shoot." |
-| `get_photo` | Pull one photo's full record, scores and metadata. | "What did the analysis say about _MG_2041.CR3?" |
-| `get_library_stats` | Shoot-level counts, keep rates, and cull progress. | "How far through culling this shoot am I?" |
-| `analyze_photos` | Score sharpness, exposure, noise, composition, and detail. Flags duplicates and bursts. | "Score everything and flag the keepers." |
-| `set_photo_status` | Override one photo's decision: keep, trash, or back to undecided. Trash never deletes files. | "Keep number 12, trash 15." |
-| `reselect_photos` | Re-rank keepers instantly, no re-analysis. Top-N portfolio mode. | "Actually, just keep the best 150." |
-| `check_score_freshness` | Report how many stored scores came from an older AI scorer. | "Are any of these scores out of date?" |
-| `reanalyze_stale_photos` | Re-score only the photos an older scorer judged; your manual picks are left alone. | "Re-score the stale ones." |
-| `apply_adjustments` | Exposure, color, crop, the full adjustment set, per photo or in batch. | "Lift the shadows a touch on the ceremony set." |
-| `list_presets` | Every preset saved in your imagic install, listed for the agent. | "What presets do I have to work with?" |
-| `apply_preset` | Batch-apply any saved preset across a selection. | "Run my film preset over the golden hour frames." |
-| `get_photo_edits` | Read the non-destructive edit stack sitting on any photo. | "What edits are on this file right now?" |
-| `start_style_calibration` | Begin the guided calibration on up to 8 photos from your library. | "Let's teach you how I edit." |
-| `record_style_calibration` | Save each calibration edit as you make it. | "Done with this one, remember those choices." |
-| `get_style_profile` | Inspect what the calibration learned about your taste. | "Describe my editing style back to me." |
-| `apply_my_style` | Edit any set of photos the way you would have. | "Edit the whole shoot like I would." |
-| `learn_style_from_library` | Train the profile on every photo you've ever edited in imagic. | "Learn my style from everything I have edited." |
-| `match_style_from_examples` | Edit a few frames from a shoot; it matches the rest to that look, without touching your saved profile. | "I edited five from this wedding, match the rest to them." |
-| `export_photos` | Batch export the keepers in your format and size, resumable if interrupted mid-batch. | "Export the keepers as full-res JPEGs." |
-| `get_preview_url` | Link to the local live-preview page that shows what the agent is doing as it happens. | "Show me what you are doing." |
+Generated from the tool descriptions the 1.6.1 server itself reports.
+
+| Tool | What it does |
+|---|---|
+| `scan_directory` | Scan a folder of photos into the imagic library. |
+| `analyze_photos` | Run AI quality scoring and auto-culling on all pending photos. |
+| `reselect_photos` | Instantly re-rank analysed photos from their stored scores. |
+| `check_score_freshness` | Check whether stored quality scores came from the current AI scorer. |
+| `reanalyze_stale_photos` | Re-score photos whose stored scores came from an older AI scorer. |
+| `get_library_stats` | Get photo counts per pipeline status (pending, keep, trash, ...). |
+| `list_photos` | List photos with id, filename, path, status, score, description and capture time. |
+| `get_photo` | Get full details for one photo: status, scores, EXIF, edit state. |
+| `set_photo_status` | Override a photo's cull decision: pending, keep, trash, or culled. |
+| `list_presets` | List available looks: the user's saved presets, scene presets, color grades and experimental presets. |
+| `apply_preset` | Apply a saved preset, scene preset, color grade or experimental preset to the given photos. |
+| `list_luts` | List the colour LUTs in the user's imagic library. |
+| `apply_lut` | Put one of the user's LUTs (see list_luts) on the given photos. |
+| `apply_auto_color` | Auto Color: per-channel levels plus colour-cast removal, measured on each photo. |
+| `harmonize_series` | Match exposure and white balance between neighbouring photos (drone mosaics, timelapse, events). |
+| `preview_mosaic` | Write a PNG preview of a drone set laid out by GPS, before and/or after harmonize_series. |
+| `apply_adjustments` | Set editor slider values on one photo, or the same values on several. |
+| `mask_adjust` | Mask part of a photo (subject, sky, people or background) and adjust only that part (local adjustments). |
+| `crop_photo` | Crop photos to an aspect ratio; imagic does the pixel maths. |
+| `save_preset` | Save a photo's current look as a named preset the user can reuse. |
+| `export_photos` | Render and export photos with all their edits to a folder. |
+| `get_photo_edits` | Read back a photo's current adjustments and edit state. |
+| `start_style_calibration` | Begin teaching imagic the user's personal editing style. |
+| `record_style_calibration` | Record the user's calibration edits into their style profile. |
+| `learn_style_from_library` | Train the user's style profile from photos already edited in imagic. |
+| `match_style_from_examples` | Copy the look of a few edited photos onto the rest of a shoot. |
+| `get_style_profile` | Get the user's learned style profile, if one exists. |
+| `apply_my_style` | Apply the user's learned personal style to the given photos. |
+| `get_preview_url` | Get the local live-preview URL showing your edits in real time. |
+| `get_job_status` | Check on a long-running job started by another tool on a remote connection. |
 
 ## Style learning: start with 8, train it on everything
 

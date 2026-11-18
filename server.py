@@ -26,7 +26,7 @@ NOT_AVAILABLE = (
     "trial) and start it with: imagic --mcp. Setup: https://imagic.ink/mcp"
 )
 
-server = Server("imagic", version="1.4.4")
+server = Server("imagic", version="1.6.1")
 
 
 @server.list_tools()
